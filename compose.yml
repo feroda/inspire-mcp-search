@@ -1,0 +1,54 @@
+
+services:
+
+  ollama:
+    image: ollama/ollama:0.34.2
+    ports:
+      - "${BIND_HOST}:${OLLAMA_PORT}:11434"
+    environment:
+      - OLLAMA_DEBUG=1
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - mynet
+
+    # Enable CUDA support and boot RAM limit
+    deploy:
+      resources:
+        limits:
+          memory: 24G
+        reservations:
+          memory: 16G
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  db:
+    image: pgvector/pgvector:0.8.6-pg18
+    env_file: .env
+    volumes:
+      - pg18:/var/lib/postgresql/
+      - ./db/init/:/docker-entrypoint-initdb.d/:ro
+    stop_signal: SIGINT
+    restart: unless-stopped
+    networks:
+      - mynet
+    ports:
+      - "${BIND_HOST}:${POSTGRES_PORT}:5432"
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+
+volumes:
+  pg18: {}
+  ollama_data: {}
+
+
+networks:
+  mynet:
+   ipam:
+     config:
+       - subnet: ${DOCKER_SUBNET}
