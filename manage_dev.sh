@@ -14,4 +14,4 @@ fi
 
 echo "Doing $COMMAND $@";
 
-$COMMAND $@
+$COMMAND "$@"
