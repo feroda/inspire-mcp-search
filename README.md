@@ -119,16 +119,17 @@ built with `vector_cosine_ops`, and the query uses `CosineDistance` (`<=>`).
 A mismatch still returns correct rows — via a sequential scan — so it is
 invisible until the table is large.
 
-**Reading the query plan matters more than adding the index.** At ~2000 rows
-Postgres prefers a sequential scan (12.2ms measured) over the HNSW index
+**The planner had to be told what a distance costs.** Out of the box,
+Postgres preferred a sequential scan (12.2ms measured) over the HNSW index
 (1.4ms when forced with `enable_seqscan = off`). The planner compares
-estimated costs, not measured times, and both estimates are off: pgvector
-declares `cosine_distance` with the default `procost` of 1 — the cost of
-comparing two integers — so a 768-dimensional distance, roughly 768
-multiply-adds, is costed as nearly free, while the HNSW scan carries a
-conservative startup estimate of 891.32 against the sequential scan's total of
-739.98. The wrong plan returns correct rows, just slowly, which is why
-`EXPLAIN ANALYZE` is the only way to see it.
+estimated costs, not times, and both estimates were wrong: pgvector declares
+`cosine_distance` with the default `procost` of 1 — the cost of comparing two
+integers — so a 768-dimensional distance, roughly 768 multiply-adds, was
+costed as free, while the HNSW scan carried a conservative startup estimate of
+891.32 against the sequential scan's total of 739.98. Migration
+`0002_distance_function_cost` declares a truthful cost, after which the
+planner chooses the index unaided. `EXPLAIN ANALYZE` is the only way to catch
+this: the wrong plan returns correct rows, just slowly.
 
 **The `vector` extension is created in a migration, not only in
 `db/init/`.** The init script runs once, for the main database, on an empty
