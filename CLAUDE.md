@@ -74,7 +74,10 @@ The intended data flow is ingest → embed via Ollama → store vectors in pgvec
 
 ## Rules
 
-- Do not create or modify files unless I ask you to.
-- Write one function at a time and explain each choice before moving on
-  to the next one.
+- You may create and modify source files directly, without asking first.
+- Work tool by tool, not function by function: batch independent edits,
+  and explain only what is non-obvious or what I would be asked about in
+  an interview.
+- Keep `tmp.md` (gitignored) as the running study file: append anything I
+  would need to defend in an interview but have not yet internalised.
 
