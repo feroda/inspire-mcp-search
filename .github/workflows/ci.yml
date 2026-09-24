@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        # Same image as compose.yml: the vector type must exist for the
+        # migrations to apply.
+        image: pgvector/pgvector:0.8.6-pg18
+        env:
+          POSTGRES_DB: inspire
+          POSTGRES_USER: inspire
+          POSTGRES_PASSWORD: inspire
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      SECRET_KEY: ci-only-key
+      POSTGRES_DB: inspire
+      POSTGRES_USER: inspire
+      POSTGRES_PASSWORD: inspire
+      DB_HOST: localhost
+      POSTGRES_PORT: 5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r web/requirements.txt
+
+      - name: Lint
+        run: ruff check web/
+
+      - name: Test
+        # No Ollama in CI: the tests stub embeddings, so retrieval behaviour
+        # is verified without a model server.
+        run: pytest -q
+        working-directory: web

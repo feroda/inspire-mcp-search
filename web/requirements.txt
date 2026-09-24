@@ -1,0 +1,11 @@
+Django==6.0.6
+djangorestframework==3.17.1
+django-environ==0.14.0
+django-extensions==4.1
+psycopg[binary]>=3.2
+pgvector>=0.4
+httpx>=0.28
+pytest>=8.3
+pytest-django>=4.9
+mcp>=2.0
+ruff>=0.8

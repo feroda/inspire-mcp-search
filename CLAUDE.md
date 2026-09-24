@@ -6,71 +6,55 @@ through an MCP server.
 
 ## Status
 
-Early-stage scaffold. Only the container/infrastructure layer exists (three commits).
+Working vertical slice: ingest -> embed -> store -> search, exposed over both a
+DRF endpoint and an MCP server, with tests and CI. See README.md for the
+architecture and the design decisions behind it.
 
 Licensed AGPL-3.0.
 
-## Environment
+## Layout
 
-- Infrastructure already working: compose.yml with `ollama` and `db` services,
-  managed through `./manage_dev.sh` (wrapper around `docker compose`).
-- Configuration lives in `.env` (template: `env_dist`): `DB_HOST=127.0.0.1`,
-  `POSTGRES_*`, `OLLAMA_PORT`, `OLLAMA_EMBEDDING_MODEL`, `OLLAMA_RAG_MODEL`.
-- Python code runs on the host in a venv, not in a container.
+Django lives in `web/`, bind-mounted to `/app` in the container.
 
-## Environment setup
-
-`.env` is gitignored and is required by both `compose.yml` (variable interpolation, and `env_file:` for the `db` service) and `manage_dev.sh`. Bootstrap it from the template:
-
-```bash
-cp env_dist .env   # then replace the `changeme` Postgres values
-```
-
-`MY_ENV` must be `dev` or `manage_dev.sh` refuses to run (guard against pointing the dev wrapper at a non-dev stack).
+- `web/inspire/` — project package (settings, urls, wsgi)
+- `web/papers/` — the single app: `models.Paper`, `embeddings`, `search`,
+  `views`, and two management commands (`ingest_inspire`, `mcp_server`)
+- `web/tests/` — pytest-django; embeddings stubbed with orthogonal unit vectors
+- `db/init/` — runs once, on an empty volume, for the main database only
 
 ## Commands
 
-All container operations go through `manage_dev.sh`, which wraps `docker compose -p $MY_PROJECT -f compose.yml` and additionally layers `compose.dev.yml` when that file exists. Any `docker compose` subcommand passes through:
+Everything goes through `./manage_dev.sh`, which wraps
+`docker compose -p $MY_PROJECT -f compose.yml`, layers `compose.dev.yml` if it
+exists and `compose.gpu.yml` when `USE_GPU=1`, and turns `django <cmd>` into
+`exec web python ./manage.py <cmd>` via `compose_final_exec.sh`.
 
 ```bash
 ./manage_dev.sh up -d
-./manage_dev.sh logs -f ollama
-./manage_dev.sh ps
-./manage_dev.sh down
+./manage_dev.sh django migrate
+./manage_dev.sh django ingest_inspire --max-records 2000
+./manage_dev.sh run --rm web pytest -q
+./manage_dev.sh run --rm web ruff check .
+./manage_dev.sh exec ollama ollama pull nomic-embed-text
 ```
 
-Pull the embedding/RAG models into the Ollama volume after first start:
+## Conventions
 
-```bash
-./manage_dev.sh exec ollama ollama pull nomic-embed-text   # $OLLAMA_EMBEDDING_MODEL
-./manage_dev.sh exec ollama ollama pull llama3.1:8b        # $OLLAMA_RAG_MODEL
-```
-
-## Architecture
-
-Two services on a dedicated bridge network (`mynet`, subnet `$DOCKER_SUBNET`), both published only to `$BIND_HOST` (`127.0.0.1` by default) rather than all interfaces:
-
-- **ollama** — serves both the embedding model and the RAG generation model. Requires an NVIDIA GPU (`deploy.resources.reservations.devices`); on a host without one, compose will fail to start the service. Container port 11434 → host `$OLLAMA_PORT` (11433, deliberately offset from the default). Models persist in the `ollama_data` volume.
-- **db** — `pgvector/pgvector` on Postgres 18, holding the vector store. `db/init/*.sql` runs once, on an empty data volume only, via the image's `docker-entrypoint-initdb.d` hook; `01-extensions.sql` creates the `vector` extension. Changes to those files have no effect on an already-initialized `pg18` volume — the volume must be dropped and recreated.
-
-The intended data flow is ingest → embed via Ollama → store vectors in pgvector → serve search over MCP; the ingest and MCP-server halves are not written yet.
-
-## Current step: ingest.py
-
-- Single download from https://inspirehep.net/api/literature with
-  q="dark matter detection", size=500, sort=mostcited,
-  fields=control_number,titles,abstracts,authors.full_name,
-  publication_info.year,arxiv_eprints. Cache the raw response in
-  data/inspire_raw.json; if the file exists, do not download again.
-- normalize(): map each record to {id, title, abstract, url, metadata};
-  skip records without an abstract.
-- Table `papers` (id integer PK, title, abstract, url, metadata jsonb,
-  embedding vector(768)), created with CREATE TABLE IF NOT EXISTS.
-- Embeddings in batches via /api/embed, with the prefix "search_document: ".
-- INSERT ... ON CONFLICT (id) DO UPDATE; register_vector from pgvector.psycopg.
-- HNSW index with vector_cosine_ops, created at the end.
-- Dependencies: httpx, psycopg[binary], pgvector, python-dotenv.
-  No LangChain/LlamaIndex, no dedicated Ollama client.
+- Config through `django-environ`: declare the variable with its type and
+  default in the `environ.Env(...)` call in `settings.py`, then read it with
+  `env("NAME")`. Add every new variable to `env_dist` as well.
+- Inside the compose network, use service names and internal ports
+  (`DB_HOST=db`, `OLLAMA_URL=http://ollama:11434`). The host mappings
+  (`$WEB_PORT`, `$OLLAMA_PORT`, `$POSTGRES_PORT`) are for debugging only.
+- The container runs as `$DOCKER_UID:$DOCKER_GID` so files written into the
+  bind mount (migrations, the raw cache) belong to the developer, not root.
+- Retrieval logic belongs in `papers/search.py`. The REST view and the MCP
+  tools are thin callers; do not duplicate a query in either.
+- Embedding prefixes live in settings and are applied inside
+  `papers/embeddings.py` — callers pass raw text.
+- MCP tools run in an event loop, so any ORM access must go through
+  `sync_to_async(..., thread_sensitive=True)`.
+- `mcp` is v2.x: the server class is `MCPServer`, not `FastMCP`.
 
 ## Rules
 

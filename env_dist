@@ -1,16 +1,25 @@
 MY_PROJECT=inspire-mcp-search
 MY_ENV=dev
+SECRET_KEY=changeme
 DEBUG=true
 HOSTNAME=localhost
 BIND_HOST=127.0.0.1
+# Set to 1 to give Ollama the host's NVIDIA GPU (compose.gpu.yml)
+USE_GPU=0
 
 POSTGRES_DB=changeme
 POSTGRES_USER=changeme
 POSTGRES_PASSWORD=changeme
 POSTGRES_PORT=5432
-DB_HOST=127.0.0.1
+# Service names on the compose network: Python runs inside the web container
+DB_HOST=db
 
+WEB_PORT=9001
+
+# Host-side mapping, for debugging only
 OLLAMA_PORT=11433
+# What the web container actually talks to
+OLLAMA_URL=http://ollama:11434
 OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 OLLAMA_RAG_MODEL=llama3.1:8b
 

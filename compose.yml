@@ -13,17 +13,12 @@ services:
     networks:
       - mynet
 
-    # Enable CUDA support and boot RAM limit
+    # Runs on CPU by default so the stack starts anywhere.
+    # Set USE_GPU=1 in .env to layer compose.gpu.yml on top.
     deploy:
       resources:
         limits:
           memory: 24G
-        reservations:
-          memory: 16G
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
 
   db:
     image: pgvector/pgvector:0.8.6-pg18
@@ -41,6 +36,23 @@ services:
       resources:
         limits:
           memory: 8G
+
+  web:
+    build: ./web/.
+    env_file: .env
+    user: "${DOCKER_UID}:${DOCKER_GID}"
+    volumes:
+      - ./web:/app
+    command: python manage.py runserver 0.0.0.0:9001
+    ports:
+      - "${BIND_HOST}:${WEB_PORT}:9001"
+    depends_on:
+      - db
+      - ollama
+    stop_signal: SIGINT
+    restart: unless-stopped
+    networks:
+      - mynet
 
 volumes:
   pg18: {}
