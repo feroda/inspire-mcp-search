@@ -48,6 +48,9 @@ cp env_dist .env          # then set POSTGRES_* and SECRET_KEY
 ./manage_dev.sh django ingest_inspire --query "dark matter detection" --max-records 2000
 ```
 
+The same steps, in one command: `make setup` (`make` alone lists the
+targets, e.g. `make search Q="…"`).
+
 Ingest takes a few minutes: it pages through the INSPIRE API, caches the raw
 response under `web/data/`, and embeds in batches. Re-running is safe — the
 raw response is reused and records upsert on INSPIRE's control number.
@@ -101,6 +104,11 @@ without naming it. The top hit shares no word with the query at all.
 ```bash
 ./manage_dev.sh run --rm web python manage.py mcp_server
 ```
+
+From an MCP client, with the stack up, use `make -s mcp` (or
+`docker compose -p inspire-mcp-search -f <repo>/compose.yml exec -T web python manage.py mcp_server`):
+nothing but JSON-RPC may reach stdout, so avoid `manage_dev.sh` there, which
+prints the command it runs.
 
 Speaks MCP over stdio and exposes two tools, `search_papers(query, limit)` and
 `get_paper(paper_id)`, so an agent can cite specific INSPIRE records instead
