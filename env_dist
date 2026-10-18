@@ -21,7 +21,8 @@ OLLAMA_PORT=11433
 # What the web container actually talks to
 OLLAMA_URL=http://ollama:11434
 OLLAMA_EMBEDDING_MODEL=nomic-embed-text
-OLLAMA_RAG_MODEL=llama3.1:8b
+# Olmo 3 (Ai2, Apache 2.0): open weights, data and training code
+OLLAMA_RAG_MODEL=olmo-3:7b
 
 DOCKER_SUBNET=172.28.0.0/16
 DOCKER_GATEWAY=172.28.0.1
